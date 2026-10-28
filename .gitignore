@@ -1,0 +1,11 @@
+# Local data and generated build output
+crm-backend/data/
+crm-backend/target/
+crm-backend/secrets.properties
+crm-backend/.mvn/wrapper/maven-wrapper.jar
+crm-frontend/node_modules/
+crm-frontend/dist/
+crm-frontend/.angular/
+
+# Local JDK files accidentally placed under the Java source tree
+crm-backend/src/main/java/com/shivam/crm/controller/oracleJdk-27/

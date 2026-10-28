@@ -1,0 +1,62 @@
+package com.shivam.crm.service;
+
+import com.shivam.crm.dto.CompanyCount;
+import com.shivam.crm.dto.ReportSummary;
+import com.shivam.crm.dto.StatusCount;
+import com.shivam.crm.model.Contact;
+import com.shivam.crm.model.ContactStatus;
+import com.shivam.crm.repository.ContactRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
+
+@Service
+public class ReportService {
+
+    @Autowired
+    private ContactRepository contactRepository;
+
+    @Autowired
+    private ContactService contactService;
+
+    public ReportSummary getSummary() {
+        // Start every status at 0 so the chart always has all four bars
+        Map<ContactStatus, Long> byStatus = new EnumMap<>(ContactStatus.class);
+        for (ContactStatus status : ContactStatus.values()) {
+            byStatus.put(status, 0L);
+        }
+
+        for (StatusCount row : contactRepository.countContactsByStatus()) {
+            // older rows saved before the status column existed count as NEW
+            ContactStatus status = row.status() == null ? ContactStatus.NEW : row.status();
+            byStatus.merge(status, row.count(), Long::sum);
+        }
+
+        long total = byStatus.values().stream().mapToLong(Long::longValue).sum();
+        long closed = byStatus.get(ContactStatus.CLOSED);
+        double conversionRate = total == 0 ? 0 : Math.round(closed * 1000.0 / total) / 10.0;
+
+        // Reuse the automation rule from ContactService instead of repeating it here
+        long needsFollowUp = contactService.getAllContacts().stream()
+                .filter(Contact::isNeedsFollowUp)
+                .count();
+
+        BigDecimal closedRevenue = orZero(contactRepository.sumDealValueByStatus(ContactStatus.CLOSED));
+        BigDecimal pipelineValue = orZero(contactRepository.sumDealValueExcludingStatus(ContactStatus.CLOSED));
+
+        List<CompanyCount> topCompanies = contactRepository.findTopCompanies(PageRequest.of(0, 5));
+
+        return new ReportSummary(total, closed, conversionRate, needsFollowUp,
+                closedRevenue, pipelineValue, byStatus, topCompanies);
+    }
+
+    // SQL sum() gives null when there is nothing to add up; show 0 instead
+    private BigDecimal orZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+}
